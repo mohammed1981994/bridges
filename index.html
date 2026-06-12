@@ -1,0 +1,915 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>جسور بغداد — بين الكرخ والرصافة</title>
+<style>
+  :root{
+    --ink:#f5efe2; --ink-dim:#cdbfa5;
+    --panel:rgba(15,22,30,.84); --panel-line:rgba(232,178,106,.35);
+    --amber:#e8a14e;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html,body{width:100%;height:100%;overflow:hidden;background:#0d1620;
+    overscroll-behavior:none;-webkit-tap-highlight-color:transparent;
+    font-family:"Segoe UI","Noto Naskh Arabic","Noto Kufi Arabic",Tahoma,Arial,sans-serif;color:var(--ink);}
+  #scene{position:fixed;inset:0;}
+  canvas{display:block;touch-action:none;}
+
+  header{position:fixed;top:0;right:0;left:0;z-index:20;pointer-events:none;
+    display:flex;justify-content:space-between;align-items:flex-start;padding:14px 18px;
+    background:linear-gradient(to bottom,rgba(10,16,24,.85),transparent);}
+  .title h1{font-size:clamp(18px,2.6vw,27px);font-weight:700;}
+  .title h1 span{color:var(--amber);}
+  .title p{font-size:clamp(10px,1.3vw,13px);color:var(--ink-dim);margin-top:3px;}
+
+  /* خريطة مصغّرة — مسار دجلة الحقيقي */
+  #minimap{position:fixed;top:74px;left:14px;z-index:20;background:var(--panel);
+    border:1px solid var(--panel-line);border-radius:12px;padding:8px;backdrop-filter:blur(8px);}
+  #minimap .cap{font-size:10px;color:var(--ink-dim);text-align:center;margin-top:4px;}
+  #minimap svg{display:block;}
+  #minimap circle{cursor:pointer;}
+
+  #panel{position:fixed;top:74px;right:14px;z-index:20;width:248px;max-height:calc(100% - 160px);
+    background:var(--panel);border:1px solid var(--panel-line);border-radius:14px;
+    backdrop-filter:blur(8px);display:flex;flex-direction:column;overflow:hidden;}
+  #panel .head{padding:10px 14px;border-bottom:1px solid var(--panel-line);
+    display:flex;justify-content:space-between;align-items:center;cursor:pointer;}
+  #panel .head h2{font-size:13.5px;color:var(--amber);}
+  #panel .head .arrow{transition:transform .25s;color:var(--ink-dim);}
+  #panel.closed .arrow{transform:rotate(180deg);}
+  #panel ul{list-style:none;overflow-y:auto;padding:6px;}
+  #panel.closed ul,#panel.closed .opts{display:none;}
+  #panel li{padding:7px 9px;border-radius:9px;cursor:pointer;font-size:12.5px;
+    display:flex;gap:8px;align-items:center;transition:background .15s;}
+  #panel li:hover{background:rgba(232,161,78,.14);}
+  #panel li.active{background:rgba(232,161,78,.25);color:#fff;}
+  #panel li .dot{width:9px;height:9px;border-radius:50%;flex:0 0 9px;}
+  #panel li .nm{flex:1;}
+  #panel li small{color:var(--ink-dim);font-size:9.5px;white-space:nowrap;}
+  #panel .opts{padding:8px 14px;border-top:1px solid var(--panel-line);font-size:12px;color:var(--ink-dim);}
+  #panel .opts label{display:flex;align-items:center;gap:8px;cursor:pointer;padding:3px 0;}
+  #panel .opts input{accent-color:var(--amber);}
+
+  #info{position:fixed;bottom:16px;right:14px;z-index:21;width:min(380px,calc(100vw - 28px));
+    background:var(--panel);border:1px solid var(--panel-line);border-radius:14px;
+    backdrop-filter:blur(8px);padding:16px;display:none;}
+  #info.show{display:block;animation:rise .3s ease;}
+  @keyframes rise{from{opacity:0;transform:translateY(12px);}to{opacity:1;transform:none;}}
+  #info h3{color:var(--amber);font-size:17px;margin-bottom:2px;}
+  #info .alt{font-size:11px;color:var(--ink-dim);margin-bottom:8px;}
+  #info .link{display:flex;align-items:center;gap:8px;font-size:12.5px;margin:8px 0;flex-wrap:wrap;}
+  #info .side{padding:3px 10px;border-radius:20px;font-size:11.5px;}
+  #info .karkh{background:rgba(217,107,79,.2);border:1px solid rgba(217,107,79,.5);}
+  #info .rusafa{background:rgba(74,144,164,.25);border:1px solid rgba(74,144,164,.6);}
+  #info p{font-size:12.5px;line-height:1.8;color:var(--ink-dim);}
+  #info .meta{font-size:11px;color:var(--amber);margin-top:8px;}
+  #info .close{position:absolute;top:10px;left:12px;background:none;border:none;color:var(--ink-dim);
+    font-size:18px;cursor:pointer;}
+
+  #hint{position:fixed;bottom:16px;left:14px;z-index:20;background:var(--panel);
+    border:1px solid var(--panel-line);border-radius:12px;padding:9px 13px;font-size:11px;
+    color:var(--ink-dim);line-height:1.9;backdrop-filter:blur(8px);}
+  #hint b{color:var(--amber);font-weight:600;}
+
+  .lbl{position:fixed;z-index:10;pointer-events:none;transform:translate(-50%,-100%);
+    white-space:nowrap;text-shadow:0 1px 4px rgba(0,0,0,.9);}
+  .lbl.bridge{font-size:12px;font-weight:700;color:#ffe3b3;pointer-events:auto;cursor:pointer;
+    background:rgba(14,20,28,.62);padding:2px 8px;border-radius:8px;border:1px solid rgba(232,161,78,.4);}
+  .lbl.bridge:hover{background:rgba(232,161,78,.35);color:#fff;}
+  .lbl.district{font-size:11px;color:#dfeef2;opacity:.9;font-weight:600;letter-spacing:.3px;}
+  .lbl.district.k{color:#f3c9b5;}
+  .lbl.landmark{font-size:9.5px;color:#bcd9c5;opacity:.8;}
+  .lbl.zone{font-size:clamp(13px,2vw,19px);font-weight:800;letter-spacing:6px;opacity:.45;color:#fff;}
+
+  @media (max-width:780px){
+    header{padding:10px 12px;}
+    .title h1{font-size:18px;}
+    .title p{font-size:9.5px;max-width:62vw;}
+    #hint{display:none;}
+    #minimap{top:58px;left:8px;padding:5px;}
+    #minimap svg{width:78px;height:156px;}
+    #minimap .cap{font-size:8.5px;}
+    #panel{top:58px;right:8px;width:min(230px,62vw);max-height:calc(100% - 130px);}
+    #panel li{font-size:11.5px;padding:6px 8px;}
+    #panel li small{display:none;}
+    #info{right:8px;left:8px;bottom:10px;width:auto;padding:13px;max-height:46vh;overflow-y:auto;}
+    #info h3{font-size:15px;}
+    #info p{font-size:11.5px;}
+    .lbl.bridge{font-size:10px;padding:2px 6px;}
+    .lbl.district{font-size:9px;}
+    .lbl.landmark{font-size:8px;}
+    .lbl.zone{letter-spacing:3px;}
+  }
+  @media (max-width:480px){
+    .title p{display:none;}
+    #panel{width:58vw;}
+    #panel .opts{font-size:11px;padding:6px 10px;}
+  }
+  @media (max-height:480px) and (orientation:landscape){
+    #minimap{display:none;}
+    #info{left:auto;width:min(340px,55vw);max-height:70vh;}
+  }
+</style>
+</head>
+<body>
+<div id="scene"></div>
+
+<header>
+  <div class="title">
+    <h1>جسور <span>بغداد</span></h1>
+    <p>اثنا عشر جسراً على المسار الحقيقي لدجلة — من جسر الأعظمية شمالاً إلى جسر الدورة جنوباً</p>
+  </div>
+</header>
+
+<div id="minimap">
+  <svg id="mmSvg" width="120" height="240" viewBox="0 0 120 240"></svg>
+  <div class="cap">مسار دجلة في بغداد</div>
+</div>
+
+<div id="panel">
+  <div class="head" onclick="togglePanel()">
+    <h2>الجسور (شمال ← جنوب)</h2><span class="arrow">▾</span>
+  </div>
+  <ul id="bridgeList"></ul>
+  <div class="opts">
+    <label><input type="checkbox" id="cbBridges" checked> أسماء الجسور</label>
+    <label><input type="checkbox" id="cbDistricts" checked> أسماء المناطق</label>
+    <label><input type="checkbox" id="cbSpin"> دوران تلقائي</label>
+  </div>
+</div>
+
+<div id="info">
+  <button class="close" onclick="closeInfo()">✕</button>
+  <h3 id="iName"></h3>
+  <div class="alt" id="iAlt"></div>
+  <div class="link">
+    <span class="side karkh" id="iKarkh"></span>
+    <span style="color:var(--ink-dim)">⇄</span>
+    <span class="side rusafa" id="iRusafa"></span>
+  </div>
+  <p id="iDesc"></p>
+  <div class="meta" id="iMeta"></div>
+</div>
+
+<div id="hint">
+  <b>سحب</b> للتدوير • <b>عجلة / قرصة</b> للتقريب<br>
+  <b>اضغط على أي جسر</b> (بالمشهد أو بالخريطة المصغّرة) لتفاصيله
+</div>
+
+<div id="labels"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+"use strict";
+/* =====================================================================
+   جسور بغداد v2 — مبني على الإحداثيات الجغرافية الحقيقية (lat/lon)
+   إسقاط: +X = شرق ، -Z = شمال ، المقياس ~ متر × 0.07
+===================================================================== */
+const LAT0 = 33.335, LON0 = 44.392, SC = 0.07;
+const M_PER_LAT = 110900, M_PER_LON = 111320 * Math.cos(LAT0 * Math.PI/180);
+const P = (lat, lon) => new THREE.Vector3((lon - LON0)*M_PER_LON*SC, 0, -(lat - LAT0)*M_PER_LAT*SC);
+
+/* ---------- مسار دجلة الحقيقي داخل بغداد (نقاط تقريبية من الخريطة) ---------- */
+const RIVER_PTS = [
+ [33.4300,44.3270],[33.4140,44.3360],[33.4040,44.3425],
+ [33.3975,44.3470],                       // جسر الأعظمية (الكوابل)
+ [33.3930,44.3505],[33.3875,44.3545],[33.3815,44.3590],
+ [33.3760,44.3590],[33.3735,44.3567],     // التواء الأعظمية + جسر الأئمة
+ [33.3700,44.3570],[33.3660,44.3610],
+ [33.3600,44.3675],                       // الصرافية
+ [33.3545,44.3722],[33.3505,44.3745],     // باب المعظم
+ [33.3455,44.3790],[33.3405,44.3835],     // الشهداء
+ [33.3355,44.3885],                       // الأحرار
+ [33.3295,44.3925],                       // السنك
+ [33.3245,44.3965],                       // الجمهورية
+ [33.3190,44.4000],[33.3135,44.4018],     // 14 تموز المعلق
+ [33.3060,44.4022],[33.2980,44.4000],
+ [33.2915,44.3955],                       // الجادرية
+ [33.2845,44.3910],[33.2780,44.3872],     // ذو الطابقين قربها
+ [33.2705,44.3840],[33.2640,44.3862],     // رأس شبه جزيرة الجادرية (جامعة بغداد)
+ [33.2600,44.3920],[33.2615,44.3985],
+ [33.2665,44.4035],[33.2725,44.4048],     // الصعود بالذراع الشرقية — جسر الدورة السريع
+ [33.2770,44.4080],[33.2748,44.4135],
+ [33.2675,44.4165],[33.2580,44.4185],[33.2475,44.4215] // الخروج نحو الزعفرانية
+];
+const curve = new THREE.CatmullRomCurve3(RIVER_PTS.map(p=>P(p[0],p[1])), false, "catmullrom", 0.35);
+const SAMPLES = 600;
+const cPts = curve.getSpacedPoints(SAMPLES);
+const RIVER_HALF = 17;
+
+function nearestT(v){ // أقرب نقطة على المسار
+  let best=0, bd=1e9;
+  for(let i=0;i<=SAMPLES;i++){const d=cPts[i].distanceToSquared(v); if(d<bd){bd=d;best=i;}}
+  return best/SAMPLES;
+}
+function frameAt(t){
+  const pos = curve.getPointAt(t), tan = curve.getTangentAt(t);
+  const perp = new THREE.Vector3(-tan.z, 0, tan.x).normalize(); // عمودي على المجرى
+  return {pos, tan, perp, ang: Math.atan2(perp.x, perp.z)};
+}
+
+/* ---------- بيانات الجسور (شمال ← جنوب) — كل جسر بنوعه الإنشائي الحقيقي ---------- */
+const BRIDGES = [
+ {name:"جسر الأعظمية", alt:"جسر 14 رمضان — المدعم بالكوابل", lat:33.3975, lon:44.3470,
+  type:"cable", color:0x5ec8d8,
+  karkh:"الكاظمية / التاجي", rusafa:"الكريعات / الأعظمية",
+  desc:"الجسر المدعم بالكوابل عند مدخل بغداد الشمالي، افتُتح نهاية عام 1983، تتدلى كوابله من برجيه على شكل مروحة، ويربط محيط الكريعات والأعظمية بالكاظمية وطريق التاجي.",
+  meta:"افتُتح 1983 • النوع: جسر مدعم بالكوابل (Cable-stayed)"},
+ {name:"جسر الأئمة", alt:"", lat:33.3735, lon:44.3567,
+  type:"archSmall", color:0xd9b178,
+  karkh:"الكاظمية", rusafa:"الأعظمية",
+  desc:"يربط مرقد الإمامين الكاظمين بجامع الإمام الأعظم أبي حنيفة عبر التواء النهر الشهير بين الكاظمية والأعظمية، وهو محور الزيارات بين الجانبين.",
+  meta:"النوع: جسر خرساني بأقواس قصيرة"},
+ {name:"جسر الصرافية", alt:"الجسر الحديدي", lat:33.3600, lon:44.3675,
+  type:"truss", color:0x9aa8b4,
+  karkh:"العطيفية", rusafa:"الوزيرية / الصرافية",
+  desc:"الجسر الحديدي ذو الهيكل المعدني المتشابك، تعاقدت عليه الحكومة أواخر 1946 وبوشر بنصبه عام 1948، وكان يحمل سكة القطار، وتضرر بتفجير 2007 ثم أعيد افتتاحه عام 2008.",
+  meta:"1948 • أعيد افتتاحه 2008 • النوع: جسر حديدي بهياكل متشابكة (Truss)"},
+ {name:"جسر باب المعظم", alt:"", lat:33.3505, lon:44.3745,
+  type:"girderSlab", color:0xc9bda4,
+  karkh:"الصالحية", rusafa:"باب المعظم",
+  desc:"يصل الصالحية قرب مبنى الإذاعة بمنطقة باب المعظم حيث وزارة الدفاع القديمة والمستشفيات التعليمية وساحة الميدان، على ركائز خرسانية لوحية.",
+  meta:"النوع: جسر عوارض على ركائز لوحية"},
+ {name:"جسر الشهداء", alt:"جسر المأمون سابقاً", lat:33.3405, lon:44.3835,
+  type:"arch", color:0xe7d9b8,
+  karkh:"الشواكة", rusafa:"شارع الرشيد / المتنبي",
+  desc:"من أقدم الجسور الثابتة، افتُتح عام 1939 وعُرف أولاً بجسر المأمون، أقواسه الخرسانية ظاهرة تحت سطحه، ويهبط شرقاً عند قلب الرصافة قرب المتنبي وسوق السراي والقشلة.",
+  meta:"افتُتح 1939 • النوع: جسر أقواس خرسانية"},
+ {name:"جسر الأحرار", alt:"موضع جسر مود التاريخي 1917", lat:33.3355, lon:44.3885,
+  type:"girderHump", color:0xb9a888,
+  karkh:"علاوي الحلة", rusafa:"الشورجة / حافظ القاضي",
+  desc:"يقوم قرب موضع جسر مود الذي نصبه البريطانيون عام 1917، ويصب شرقاً في أزحم مناطق بغداد التجارية: الشورجة وحافظ القاضي وسوق الهرج.",
+  meta:"النوع: جسر عوارض محدّب الوسط"},
+ {name:"جسر السنك", alt:"جسر الرشيد", lat:33.3295, lon:44.3925,
+  type:"boxGirder", color:0x6fa8c9,
+  karkh:"كرادة مريم", rusafa:"السنك / شارع الجمهورية",
+  desc:"افتُتح عام 1982 باسم جسر الرشيد، جسر صندوقي حديث بسطح نحيف متصل، يربط كرادة مريم بمنطقة السنك ويخفف الزخم عن جسري الجمهورية والأحرار.",
+  meta:"افتُتح 1982 • النوع: جسر صندوقي (Box girder)"},
+ {name:"جسر الجمهورية", alt:"جسر الملكة عالية سابقاً", lat:33.3245, lon:44.3965,
+  type:"girderV", color:0x8fbf8f,
+  karkh:"المنطقة الخضراء (كرادة مريم)", rusafa:"ساحة التحرير",
+  desc:"افتُتح عام 1957 باسم جسر الملكة عالية، أعرض جسور المركز بأربع حارات وركائز على شكل V، ينتهي شرقاً عند ساحة التحرير ونصب الحرية لجواد سليم.",
+  meta:"افتُتح 1957 • النوع: جسر عوارض عريض بركائز V"},
+ {name:"الجسر المعلّق", alt:"جسر 14 تموز", lat:33.3135, lon:44.4018,
+  type:"suspension", color:0xf2f2f2,
+  karkh:"المنطقة الخضراء", rusafa:"الكرادة",
+  desc:"الجسر المعلّق الوحيد في بغداد، صممه المهندس الأمريكي ديفيد ستينمان عام 1959، فتحته الوسطى 168 متراً وطوله الكلي مع المقتربات 868 متراً، تتدلى حباله الفولاذية من برجين فوق المجرى.",
+  meta:"اكتمل أوائل الستينات • فتحة وسطى 168م • النوع: جسر معلّق بالحبال"},
+ {name:"جسر الجادرية", alt:"جسر 30 تموز", lat:33.2915, lon:44.3955,
+  type:"boxGirderWide", color:0xe0e0e0,
+  karkh:"القادسية / حي الجامعة", rusafa:"الجادرية",
+  desc:"افتُتح عام 1982، جسر صندوقي عريض على الذراع الغربية لشبه جزيرة الجادرية، شريان طلبة جامعة بغداد وحركة جنوب الكرخ.",
+  meta:"افتُتح 1982 • النوع: جسر صندوقي عريض"},
+ {name:"جسر ذو الطابقين", alt:"جسر الحسنين", lat:33.2780, lon:44.3872,
+  type:"double", color:0xd98f5f,
+  karkh:"الدورة", rusafa:"الكرادة / الجادرية",
+  desc:"افتُتح عام 1995، الجسر الوحيد بطابقين فوق بعضهما في بغداد، يعبر قرب رأس شبه الجزيرة رابطاً الدورة بمحيط الجادرية والكرادة.",
+  meta:"افتُتح 1995 • النوع: جسر بطابقين"},
+ {name:"جسر الدورة السريع", alt:"ضمن طريق بغداد السريع", lat:33.2725, lon:44.4048,
+  type:"viaduct", color:0xc4b6e0,
+  karkh:"الدورة", rusafa:"الرصافة الجنوبية / الزعفرانية",
+  desc:"افتُتح عام 1983 ضمن منظومة الطريق السريع، جسر عالٍ بمسربين منفصلين يعبر الذراع الشرقية للنهر ناقلاً الحركة السريعة نحو الزعفرانية وخارج المدينة.",
+  meta:"افتُتح 1983 • النوع: مجاز علوي سريع بمسربين"}
+];
+
+/* ---------- المناطق بمواقعها الجغرافية ---------- */
+const DISTRICTS = [
+ {n:"الكاظمية", lat:33.380, lon:44.337, side:"k"},
+ {n:"العطيفية", lat:33.3635, lon:44.349, side:"k"},
+ {n:"الصالحية", lat:33.349, lon:44.367, side:"k"},
+ {n:"الشواكة", lat:33.3405, lon:44.377, side:"k"},
+ {n:"علاوي الحلة", lat:33.333, lon:44.381, side:"k"},
+ {n:"كرادة مريم", lat:33.322, lon:44.391, side:"k"},
+ {n:"المنطقة الخضراء", lat:33.312, lon:44.388, side:"k"},
+ {n:"القادسية", lat:33.296, lon:44.385, side:"k"},
+ {n:"المنصور", lat:33.315, lon:44.357, side:"k"},
+ {n:"الدورة", lat:33.262, lon:44.379, side:"k"},
+ {n:"الكريعات", lat:33.401, lon:44.354, side:"r"},
+ {n:"الأعظمية", lat:33.372, lon:44.366, side:"r"},
+ {n:"الوزيرية", lat:33.357, lon:44.3755, side:"r"},
+ {n:"باب المعظم", lat:33.351, lon:44.380, side:"r"},
+ {n:"شارع المتنبي", lat:33.3415, lon:44.388, side:"r"},
+ {n:"الشورجة", lat:33.337, lon:44.3935, side:"r"},
+ {n:"السنك", lat:33.331, lon:44.3965, side:"r"},
+ {n:"ساحة التحرير", lat:33.3265, lon:44.4005, side:"r"},
+ {n:"الباب الشرقي", lat:33.322, lon:44.404, side:"r"},
+ {n:"أبو نؤاس", lat:33.310, lon:44.406, side:"r"},
+ {n:"الكرادة", lat:33.300, lon:44.412, side:"r"},
+ {n:"الجادرية", lat:33.277, lon:44.397, side:"r"},
+ {n:"جامعة بغداد", lat:33.2665, lon:44.389, side:"r"},
+ {n:"الزعفرانية", lat:33.258, lon:44.428, side:"r"}
+];
+
+/* ---------- المشهد ---------- */
+const scene = new THREE.Scene();
+scene.fog = new THREE.Fog(0x223240, 750, 1900);
+const renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.getElementById("scene").appendChild(renderer.domElement);
+const camera = new THREE.PerspectiveCamera(55, innerWidth/innerHeight, 1, 5000);
+
+/* سماء الغروب + الشمس غرباً */
+(function(){
+  const c = document.createElement("canvas"); c.width=16; c.height=256;
+  const g = c.getContext("2d"), grd = g.createLinearGradient(0,0,0,256);
+  grd.addColorStop(0,"#1b2b45"); grd.addColorStop(.45,"#3d4a63");
+  grd.addColorStop(.72,"#b96a3e"); grd.addColorStop(.88,"#e8a14e"); grd.addColorStop(1,"#f4c87a");
+  g.fillStyle=grd; g.fillRect(0,0,16,256);
+  scene.add(new THREE.Mesh(new THREE.SphereGeometry(2300,32,16),
+    new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(c), side:THREE.BackSide, fog:false})));
+  const sun = new THREE.Mesh(new THREE.SphereGeometry(60,24,24),
+    new THREE.MeshBasicMaterial({color:0xffd9a0, fog:false}));
+  sun.position.set(-1800, 150, -300); scene.add(sun);
+  const halo = new THREE.Mesh(new THREE.SphereGeometry(105,24,24),
+    new THREE.MeshBasicMaterial({color:0xffb86b, transparent:true, opacity:.25, fog:false}));
+  halo.position.copy(sun.position); scene.add(halo);
+})();
+scene.add(new THREE.HemisphereLight(0xffd9a8, 0x2b3a4a, .75));
+const sunLight = new THREE.DirectionalLight(0xffbe7d, 1.1);
+sunLight.position.set(-700, 380, -150); sunLight.castShadow = true;
+sunLight.shadow.mapSize.set(2048,2048);
+Object.assign(sunLight.shadow.camera, {left:-900, right:900, top:900, bottom:-900, far:3000});
+scene.add(sunLight);
+const glint = new THREE.PointLight(0xff9c4a, 1.0, 1000, 2);
+glint.position.set(-150, 25, 60); scene.add(glint);
+
+/* الأرض */
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(4200,3400),
+  new THREE.MeshStandardMaterial({color:0x6e6a52, roughness:1}));
+ground.rotation.x = -Math.PI/2; ground.position.y = -2.5;
+ground.receiveShadow = true; scene.add(ground);
+
+/* ---------- النهر: شريط يتبع المنحني الحقيقي ---------- */
+let riverGeo, riverBase;
+(function(){
+  const pos=[], uv=[], idx=[];
+  for(let i=0;i<=SAMPLES;i++){
+    const t=i/SAMPLES, f=frameAt(t);
+    const L=f.pos.clone().addScaledVector(f.perp,-RIVER_HALF);
+    const R=f.pos.clone().addScaledVector(f.perp, RIVER_HALF);
+    pos.push(L.x,0,L.z, R.x,0,R.z); uv.push(0,t,1,t);
+  }
+  for(let i=0;i<SAMPLES;i++){const a=i*2;idx.push(a,a+2,a+1, a+1,a+2,a+3);}
+  riverGeo = new THREE.BufferGeometry();
+  riverGeo.setAttribute("position", new THREE.Float32BufferAttribute(pos,3));
+  riverGeo.setAttribute("uv", new THREE.Float32BufferAttribute(uv,2));
+  riverGeo.setIndex(idx); riverGeo.computeVertexNormals();
+  riverBase = pos.slice();
+  const river = new THREE.Mesh(riverGeo, new THREE.MeshStandardMaterial({
+    color:0x2a6f80, metalness:.55, roughness:.22, emissive:0x16323c, emissiveIntensity:.5}));
+  river.receiveShadow = true; scene.add(river);
+  // الضفاف
+  const bankMat = new THREE.MeshStandardMaterial({color:0x8a7c5d, roughness:1});
+  [-1,1].forEach(s=>{
+    const bp=[], bi=[];
+    for(let i=0;i<=SAMPLES;i++){
+      const f=frameAt(i/SAMPLES);
+      const a=f.pos.clone().addScaledVector(f.perp, s*RIVER_HALF);
+      const b=f.pos.clone().addScaledVector(f.perp, s*(RIVER_HALF+7));
+      bp.push(a.x,.1,a.z, b.x,2.2,b.z);
+    }
+    for(let i=0;i<SAMPLES;i++){const a=i*2;bi.push(a,a+2,a+1, a+1,a+2,a+3);}
+    const g=new THREE.BufferGeometry();
+    g.setAttribute("position",new THREE.Float32BufferAttribute(bp,3));
+    g.setIndex(bi); g.computeVertexNormals();
+    const m=new THREE.Mesh(g,bankMat); m.receiveShadow=true; scene.add(m);
+  });
+})();
+
+/* شوارع موازية للنهر: الرشيد (شرق) وأبو نؤاس (شرق الذراع) وحيفا (غرب) */
+function shoreRoad(t0, t1, side, off, w){
+  const pos=[], idx=[]; const n=60;
+  for(let i=0;i<=n;i++){
+    const f=frameAt(t0+(t1-t0)*i/n);
+    const a=f.pos.clone().addScaledVector(f.perp, side*(RIVER_HALF+off));
+    const b=f.pos.clone().addScaledVector(f.perp, side*(RIVER_HALF+off+w));
+    pos.push(a.x,1.4,a.z, b.x,1.4,b.z);
+  }
+  for(let i=0;i<n;i++){const a=i*2;idx.push(a,a+2,a+1, a+1,a+2,a+3);}
+  const g=new THREE.BufferGeometry();
+  g.setAttribute("position",new THREE.Float32BufferAttribute(pos,3));
+  g.setIndex(idx); g.computeVertexNormals();
+  const m=new THREE.Mesh(g,new THREE.MeshStandardMaterial({color:0x44484e,roughness:.95}));
+  m.receiveShadow=true; scene.add(m);
+}
+const tShuhada = nearestT(P(33.3405,44.3835)), tJumh = nearestT(P(33.3245,44.3965)),
+      t14 = nearestT(P(33.3135,44.4018));
+shoreRoad(tShuhada-0.02, tJumh+0.01, 1, 10, 7);   // شارع الرشيد
+shoreRoad(tJumh, t14+0.05, 1, 9, 6);              // أبو نؤاس
+shoreRoad(tShuhada-0.03, t14, -1, 11, 7);         // حيفا
+
+/* ---------- مواد ---------- */
+const M = {
+  asphalt:new THREE.MeshStandardMaterial({color:0x3a3f46, roughness:.9}),
+  concrete:new THREE.MeshStandardMaterial({color:0xc9bda4, roughness:.85}),
+  concreteOld:new THREE.MeshStandardMaterial({color:0xe2d6b6, roughness:.9}),
+  steel:new THREE.MeshStandardMaterial({color:0x7c8a96, roughness:.4, metalness:.75}),
+  steelDark:new THREE.MeshStandardMaterial({color:0x55626e, roughness:.45, metalness:.7}),
+  cable:new THREE.MeshStandardMaterial({color:0xe8edf2, roughness:.35, metalness:.85}),
+  trunk:new THREE.MeshStandardMaterial({color:0x6b4f33, roughness:1}),
+  palm:new THREE.MeshStandardMaterial({color:0x3f6b3a, roughness:1}),
+};
+const buildingMats=[0xb9a888,0xcabf9f,0xa8967a,0xd6c9ab,0x9a8d74,0xc2b08e]
+  .map(c=>new THREE.MeshStandardMaterial({color:c,roughness:.95}));
+function box(w,h,d,mat){const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+  m.castShadow=m.receiveShadow=true; return m;}
+function railMat(c){return new THREE.MeshStandardMaterial({color:c,roughness:.6});}
+
+/* ---------- مكوّنات مشتركة ---------- */
+function pier(x,topY,h,r1,r2){
+  const p=new THREE.Mesh(new THREE.CylinderGeometry(r1||2.2,r2||2.9,h,10),M.concrete);
+  p.position.set(x, topY-h/2, 0); p.castShadow=true; return p;}
+function slabPier(x,topY,h,w){
+  const p=box(w||3, h, 9, M.concrete); p.position.set(x, topY-h/2, 0); return p;}
+function deck(len,w,y,color,thick){
+  const g=new THREE.Group();
+  const d=box(len, thick||1.5, w, M.asphalt); d.position.y=y; g.add(d);
+  const rm=railMat(color);
+  [-1,1].forEach(s=>{const r=box(len,.8,.45,rm); r.position.set(0,y+1.1,s*(w/2-.35)); g.add(r);});
+  for(let x=-len/2+9;x<len/2;x+=20){
+    const pole=new THREE.Mesh(new THREE.CylinderGeometry(.22,.22,5.5,6),M.steel);
+    pole.position.set(x,y+3.5,0); g.add(pole);
+    const lamp=new THREE.Mesh(new THREE.SphereGeometry(.6,8,8),
+      new THREE.MeshBasicMaterial({color:0xffd9a0}));
+    lamp.position.set(x,y+6.4,0); g.add(lamp);
+  }
+  return g;
+}
+
+/* ---------- بنّاؤو الجسور — كل نوع بشكل مختلف فعلاً ---------- */
+const BUILDERS = {
+
+ cable(len,c){ // الأعظمية: كوابل مروحية من برجين
+  const g=new THREE.Group(), y=11, span=len*0.3, H=46;
+  g.add(deck(len,13,y,c));
+  [-span,span].forEach(tx=>{
+    const tower=box(3.2,H,3.2,M.concrete); tower.position.set(tx,y+H/2-4,0); g.add(tower);
+    g.add(pier(tx,y-.8,y+2,3,3.8));
+    for(let k=1;k<=5;k++){
+      [-1,1].forEach(dir=>{
+        const ax=tx+dir*k*(len*0.07);
+        if(Math.abs(ax)>len/2-2) return;
+        const top=new THREE.Vector3(tx,y+H-5-k*1.2,0), bot=new THREE.Vector3(ax,y+1,0);
+        const mid=top.clone().lerp(bot,.5);
+        const cab=new THREE.Mesh(new THREE.CylinderGeometry(.18,.18,top.distanceTo(bot),5),M.cable);
+        cab.position.copy(mid);
+        cab.lookAt(bot); cab.rotateX(Math.PI/2);
+        g.add(cab);
+      });
+    }
+  });
+  return g;
+ },
+
+ suspension(len,c){ // 14 تموز: برجان بوابيان + حبال مقوّسة + شدّادات
+  const g=new THREE.Group(), y=11, towerX=len*0.27, H=44;
+  g.add(deck(len,13,y,c));
+  [-towerX,towerX].forEach(tx=>{
+    [-6.5,6.5].forEach(z=>{const t=box(2.8,H,2.4,M.concrete);
+      t.position.set(tx,y+H/2-5,z); g.add(t);});
+    const beam=box(3.4,2.4,16,M.concrete); beam.position.set(tx,y+H-7,0); g.add(beam);
+    g.add(pier(tx,y-.8,y+2.5,3,3.8));
+  });
+  const topY=y+H-7.5, sag=y+3;
+  [-6.5,6.5].forEach(z=>{
+    const mid=new THREE.QuadraticBezierCurve3(
+      new THREE.Vector3(-towerX,topY,z), new THREE.Vector3(0,sag,z), new THREE.Vector3(towerX,topY,z));
+    g.add(new THREE.Mesh(new THREE.TubeGeometry(mid,26,.4,6),M.cable));
+    [[-len/2,-towerX],[towerX,len/2]].forEach(([a,b])=>{
+      const sc=new THREE.QuadraticBezierCurve3(
+        new THREE.Vector3(a,y+1.4,z), new THREE.Vector3((a+b)/2,(topY+y)/2,z), new THREE.Vector3(b,topY,z));
+      g.add(new THREE.Mesh(new THREE.TubeGeometry(sc,12,.4,6),M.cable));
+    });
+    for(let x=-towerX+6;x<towerX;x+=6){
+      const t=Math.abs(x)/towerX, cy=sag+(topY-sag)*t*t, h=cy-(y+1);
+      const hg=new THREE.Mesh(new THREE.CylinderGeometry(.1,.1,h,4),M.cable);
+      hg.position.set(x,y+1+h/2,z); g.add(hg);
+    }
+  });
+  return g;
+ },
+
+ truss(len,c){ // الصرافية: هيكل حديدي متشابك فوق السطح
+  const g=new THREE.Group(), y=11;
+  g.add(deck(len,12,y,c,1.8));
+  const span=(len-10)/3;
+  for(let s=0;s<=3;s++) g.add(slabPier(-len/2+5+s*span, y-.8, y+2, 3.4));
+  for(let s=0;s<3;s++){
+    const x0=-len/2+5+s*span, x1=x0+span, H=13;
+    [-5.5,5.5].forEach(z=>{
+      const top=new THREE.QuadraticBezierCurve3(
+        new THREE.Vector3(x0,y+1,z), new THREE.Vector3((x0+x1)/2,y+H,z), new THREE.Vector3(x1,y+1,z));
+      g.add(new THREE.Mesh(new THREE.TubeGeometry(top,18,.7,6),M.steelDark));
+      const N=6;
+      for(let k=1;k<N;k++){
+        const t=k/N, x=x0+span*t, h=(H-1)*4*t*(1-t);
+        const post=new THREE.Mesh(new THREE.CylinderGeometry(.3,.3,h,5),M.steelDark);
+        post.position.set(x,y+1+h/2,z); g.add(post);
+        // قطريات X
+        if(k<N-1){
+          const xn=x0+span*(k+1)/N, hn=(H-1)*4*((k+1)/N)*(1-(k+1)/N);
+          const a=new THREE.Vector3(x,y+1,z), b=new THREE.Vector3(xn,y+1+hn,z);
+          const diag=new THREE.Mesh(new THREE.CylinderGeometry(.2,.2,a.distanceTo(b),4),M.steelDark);
+          diag.position.copy(a.clone().lerp(b,.5)); diag.lookAt(b); diag.rotateX(Math.PI/2); g.add(diag);
+          const a2=new THREE.Vector3(x,y+1+h,z), b2=new THREE.Vector3(xn,y+1,z);
+          const d2=new THREE.Mesh(new THREE.CylinderGeometry(.2,.2,a2.distanceTo(b2),4),M.steelDark);
+          d2.position.copy(a2.clone().lerp(b2,.5)); d2.lookAt(b2); d2.rotateX(Math.PI/2); g.add(d2);
+        }
+      }
+      // روابط عرضية علوية
+    });
+    const tie=box(1,.7,11,M.steelDark); tie.position.set((x0+x1)/2,y+H-.5,0); g.add(tie);
+  }
+  return g;
+ },
+
+ arch(len,c){ // الشهداء: أقواس خرسانية ظاهرة وكبيرة
+  const g=new THREE.Group(), y=12;
+  g.add(deck(len,12,y,c,1.2));
+  const n=4, span=(len-8)/n;
+  for(let s=0;s<=n;s++) g.add(slabPier(-len/2+4+s*span, y-.6, y+2.4, 2.6));
+  for(let s=0;s<n;s++){
+    const x0=-len/2+4+s*span, x1=x0+span;
+    [-4.5,0,4.5].forEach(z=>{
+      const a=new THREE.QuadraticBezierCurve3(
+        new THREE.Vector3(x0,y-11,z), new THREE.Vector3((x0+x1)/2,y-1,z), new THREE.Vector3(x1,y-11,z));
+      const tube=new THREE.Mesh(new THREE.TubeGeometry(a,16,1.3,8),M.concreteOld);
+      tube.castShadow=true; g.add(tube);
+    });
+  }
+  return g;
+ },
+
+ archSmall(len,c){ // الأئمة: أقواس أقصر وأكثر
+  const g=new THREE.Group(), y=10.5;
+  g.add(deck(len,12,y,c,1.3));
+  const n=6, span=(len-8)/n;
+  for(let s=0;s<=n;s++) g.add(pier(-len/2+4+s*span, y-.6, y+2, 1.9,2.4));
+  for(let s=0;s<n;s++){
+    const x0=-len/2+4+s*span, x1=x0+span;
+    [-4,4].forEach(z=>{
+      const a=new THREE.QuadraticBezierCurve3(
+        new THREE.Vector3(x0,y-7,z), new THREE.Vector3((x0+x1)/2,y-1,z), new THREE.Vector3(x1,y-7,z));
+      g.add(new THREE.Mesh(new THREE.TubeGeometry(a,12,1,7),M.concrete));
+    });
+  }
+  return g;
+ },
+
+ girderSlab(len,c){ // باب المعظم: ركائز لوحية
+  const g=new THREE.Group(), y=11;
+  g.add(deck(len,14,y,c));
+  for(let x=-len/2+8;x<=len/2-8;x+=(len-16)/3) g.add(slabPier(x,y-.8,y+2,4));
+  return g;
+ },
+
+ girderHump(len,c){ // الأحرار: محدّب الوسط
+  const g=new THREE.Group(), y=10;
+  const seg=8;
+  for(let s=0;s<seg;s++){
+    const x=-len/2+len*(s+.5)/seg;
+    const lift=4*Math.sin(Math.PI*(s+.5)/seg);
+    const d=box(len/seg+0.5,1.5,13,M.asphalt);
+    d.position.set(x,y+lift,0);
+    d.rotation.z=-Math.cos(Math.PI*(s+.5)/seg)*Math.PI*4/len*(len/seg);
+    g.add(d);
+  }
+  const rm=railMat(c);
+  [-1,1].forEach(sd=>{
+    for(let s=0;s<seg;s++){
+      const x=-len/2+len*(s+.5)/seg, lift=4*Math.sin(Math.PI*(s+.5)/seg);
+      const r=box(len/seg,0.8,.45,rm); r.position.set(x,y+lift+1.1,sd*6); g.add(r);
+    }
+  });
+  for(let x=-len/2+8;x<=len/2-8;x+=(len-16)/4) g.add(pier(x,y-.8,y+2,2.2,2.9));
+  return g;
+ },
+
+ boxGirder(len,c){ // السنك: صندوقي نحيف
+  const g=new THREE.Group(), y=12;
+  const d=box(len,2.6,11,new THREE.MeshStandardMaterial({color:0xd9d4c8,roughness:.7}));
+  d.position.y=y; g.add(d);
+  const top=box(len,.4,11,M.asphalt); top.position.y=y+1.5; g.add(top);
+  const rm=railMat(c);
+  [-1,1].forEach(s=>{const r=box(len,.9,.4,rm); r.position.set(0,y+2.4,s*5.1); g.add(r);});
+  for(let x=-len/2+10;x<=len/2-10;x+=(len-20)/2) g.add(pier(x,y-1.2,y+1.3,2.4,2.4));
+  for(let x=-len/2+9;x<len/2;x+=24){
+    const pole=new THREE.Mesh(new THREE.CylinderGeometry(.2,.2,5,6),M.steel);
+    pole.position.set(x,y+4.5,0); g.add(pole);
+    const lamp=new THREE.Mesh(new THREE.SphereGeometry(.55,8,8),
+      new THREE.MeshBasicMaterial({color:0xbfe3ff})); lamp.position.set(x,y+7.1,0); g.add(lamp);
+  }
+  return g;
+ },
+
+ boxGirderWide(len,c){ // الجادرية: صندوقي عريض
+  const g=new THREE.Group(), y=12;
+  const d=box(len,2.8,19,new THREE.MeshStandardMaterial({color:0xd9d4c8,roughness:.7}));
+  d.position.y=y; g.add(d);
+  const top=box(len,.4,19,M.asphalt); top.position.y=y+1.6; g.add(top);
+  const med=box(len,.7,.8,railMat(0xffffff)); med.position.y=y+2.1; g.add(med);
+  const rm=railMat(c);
+  [-1,1].forEach(s=>{const r=box(len,.9,.4,rm); r.position.set(0,y+2.5,s*9.2); g.add(r);});
+  for(let x=-len/2+10;x<=len/2-10;x+=(len-20)/3){
+    [-5,5].forEach(z=>{const p=pier(x,y-1.3,y+1.2,2,2); p.position.z=z; g.add(p);});
+  }
+  for(let x=-len/2+9;x<len/2;x+=22){
+    const pole=new THREE.Mesh(new THREE.CylinderGeometry(.2,.2,6,6),M.steel);
+    pole.position.set(x,y+5,0); g.add(pole);
+    const arm=box(7,.3,.3,M.steel); arm.position.set(x,y+7.8,0); g.add(arm);
+    [-3,3].forEach(z=>{const lamp=new THREE.Mesh(new THREE.SphereGeometry(.5,8,8),
+      new THREE.MeshBasicMaterial({color:0xffd9a0})); lamp.position.set(x,y+7.6,z); g.add(lamp);});
+  }
+  return g;
+ },
+
+ girderV(len,c){ // الجمهورية: عريض بركائز V
+  const g=new THREE.Group(), y=11;
+  g.add(deck(len,20,y,c));
+  g.children[0].children[0].scale.z=1; // السطح أصلاً 20
+  for(let x=-len/2+9;x<=len/2-9;x+=(len-18)/3){
+    [-1,1].forEach(dir=>{
+      const leg=box(2.2,y+3,3,M.concrete);
+      leg.position.set(x+dir*2.6, (y-1)/2, 0);
+      leg.rotation.z=dir*0.32; g.add(leg);
+    });
+  }
+  return g;
+ },
+
+ double(len,c){ // ذو الطابقين
+  const g=new THREE.Group(), y=10;
+  g.add(deck(len,12,y,c));
+  g.add(deck(len,12,y+9.5,c));
+  for(let x=-len/2+8;x<=len/2-8;x+=(len-16)/4){
+    g.add(pier(x,y-.8,y+2,2.4,3));
+    [-4.6,4.6].forEach(z=>{
+      const col=box(1.8,9.5,1.8,M.concrete); col.position.set(x,y+4.75,z); g.add(col);});
+    const brace=box(1.2,.8,10,M.concrete); brace.position.set(x,y+5,0); g.add(brace);
+  }
+  return g;
+ },
+
+ viaduct(len,c){ // الدورة السريع: عالٍ بمسربين منفصلين
+  const g=new THREE.Group(), y=19;
+  [-5.5,5.5].forEach(z=>{
+    const d=box(len,2,9,M.asphalt); d.position.set(0,y,z); g.add(d);
+    const rm=railMat(c);
+    [-1,1].forEach(s=>{const r=box(len,.8,.4,rm); r.position.set(0,y+1.4,z+s*4.2); g.add(r);});
+  });
+  for(let x=-len/2+8;x<=len/2-8;x+=(len-16)/4){
+    [-5.5,5.5].forEach(z=>{
+      const p=new THREE.Mesh(new THREE.CylinderGeometry(1.9,2.3,y+2,10),M.concrete);
+      p.position.set(x,(y-2)/2,z); p.castShadow=true; g.add(p);});
+    const cap=box(2.6,1.4,16,M.concrete); cap.position.set(x,y-1.6,0); g.add(cap);
+  }
+  return g;
+ }
+};
+
+/* ---------- وضع الجسور على المسار الحقيقي ---------- */
+const roadMat=new THREE.MeshStandardMaterial({color:0x44484e,roughness:.95});
+const bridgeFrames=[];
+BRIDGES.forEach((b,i)=>{
+  const t=nearestT(P(b.lat,b.lon));
+  const f=frameAt(t);
+  bridgeFrames.push(f);
+  const len=RIVER_HALF*2+34;
+  const g=BUILDERS[b.type](len, b.color);
+  g.position.copy(f.pos);
+  g.rotation.y=f.ang - Math.PI/2; // محور X المحلي = العمودي على النهر
+  g.traverse(o=>{o.userData.bridge=i;});
+  scene.add(g);
+  // طرق المقتربات من الجهتين
+  const yA=b.type==="viaduct"?17:1.2;
+  [-1,1].forEach(s=>{
+    const road=box(85,.6,10,roadMat);
+    const off=f.perp.clone().multiplyScalar(s*(len/2+41));
+    road.position.copy(f.pos).add(off); road.position.y=yA;
+    road.rotation.y=g.rotation.y; road.userData.bridge=i;
+    if(b.type==="viaduct"){road.scale.y=.5;}
+    scene.add(road);
+  });
+});
+
+/* ---------- العمارة والنخيل ---------- */
+(function(){
+  const rnd=(a,b)=>a+Math.random()*(b-a);
+  const min=P(33.43,44.327), max=P(33.2475,44.4215);
+  let placed=0, tries=0;
+  while(placed<620 && tries<4000){
+    tries++;
+    const x=rnd(Math.min(min.x,max.x)-160, Math.max(min.x,max.x)+160);
+    const z=rnd(Math.min(min.z,max.z)-60, Math.max(min.z,max.z)+60);
+    const v=new THREE.Vector3(x,0,z);
+    let dmin=1e9;
+    for(let i=0;i<=SAMPLES;i+=4){const d=cPts[i].distanceTo(v); if(d<dmin)dmin=d;}
+    if(dmin < RIVER_HALF+11) continue;            // داخل النهر/الضفة
+    if(dmin > 320) continue;                       // بعيد عن المدينة
+    let onRoad=false;
+    for(const f of bridgeFrames){
+      const rel=v.clone().sub(f.pos);
+      if(Math.abs(rel.dot(f.tan))<9 && rel.dot(f.perp)<150 && rel.dot(f.perp)>-150){onRoad=true;break;}
+    }
+    if(onRoad) continue;
+    const central=(z>-700&&z<150)?1:.5;
+    const near=Math.max(0,1-(dmin-28)/300);
+    const h=rnd(4,8)+24*near*central*Math.random();
+    const bld=box(rnd(7,15),h,rnd(7,15),buildingMats[(Math.random()*6)|0]);
+    bld.position.set(x,h/2,z); bld.rotation.y=rnd(-.2,.2);
+    scene.add(bld); placed++;
+  }
+  // نخيل الكورنيش
+  for(let n=0;n<170;n++){
+    const t=Math.random(), f=frameAt(t), s=Math.random()<.5?-1:1;
+    const p=f.pos.clone().addScaledVector(f.perp, s*(RIVER_HALF+rnd(9,20)));
+    const h=rnd(7,12);
+    const tr=new THREE.Mesh(new THREE.CylinderGeometry(.45,.7,h,6),M.trunk);
+    tr.position.set(p.x,h/2,p.z); tr.castShadow=true; scene.add(tr);
+    const top=new THREE.Mesh(new THREE.ConeGeometry(3,4,7),M.palm);
+    top.position.set(p.x,h+1.4,p.z); top.castShadow=true; scene.add(top);
+  }
+})();
+
+/* ---------- العلامات ---------- */
+const labelsRoot=document.getElementById("labels");
+const labels=[];
+function addLabel(text,v,y,cls,onClick){
+  const el=document.createElement("div");
+  el.className="lbl "+cls; el.textContent=text;
+  if(onClick) el.addEventListener("click",onClick);
+  labelsRoot.appendChild(el);
+  labels.push({el,pos:new THREE.Vector3(v.x,y,v.z),kind:cls.split(" ")[0]});
+}
+BRIDGES.forEach((b,i)=>{
+  const f=bridgeFrames[i];
+  addLabel(b.name, f.pos, b.type==="viaduct"?34:(b.type==="cable"||b.type==="suspension")?52:28,
+    "bridge", ()=>selectBridge(i));
+});
+DISTRICTS.forEach(d=>addLabel(d.n, P(d.lat,d.lon), 20, "district "+d.side));
+addLabel("نصب الحرية", P(33.3268,44.4012), 12, "landmark");
+addLabel("القشلة", P(33.3395,44.3858), 12, "landmark");
+addLabel("المدرسة المستنصرية", P(33.3385,44.3875), 10, "landmark");
+addLabel("الـكـرخ", P(33.345,44.352), 4, "zone");
+addLabel("الـرصـافـة", P(33.348,44.405), 4, "zone");
+addLabel("⬆ مجرى دجلة من الشمال", P(33.428,44.328), 8, "landmark");
+addLabel("⬇ نحو الزعفرانية وديالى", P(33.249,44.421), 8, "landmark");
+
+/* ---------- الخريطة المصغّرة (نفس الإحداثيات) ---------- */
+(function(){
+  const svg=document.getElementById("mmSvg");
+  const xs=RIVER_PTS.map(p=>p[1]), ys=RIVER_PTS.map(p=>p[0]);
+  const x0=Math.min(...xs), x1=Math.max(...xs), y0=Math.min(...ys), y1=Math.max(...ys);
+  const PX=lon=>8+((lon-x0)/(x1-x0))*104, PY=lat=>8+((y1-lat)/(y1-y0))*224;
+  let d="";
+  RIVER_PTS.forEach((p,i)=>{d+=(i?"L":"M")+PX(p[1]).toFixed(1)+","+PY(p[0]).toFixed(1);});
+  svg.innerHTML=`<path d="${d}" fill="none" stroke="#3f93a8" stroke-width="4"
+     stroke-linecap="round" stroke-linejoin="round" opacity=".9"/>`;
+  BRIDGES.forEach((b,i)=>{
+    const c=document.createElementNS("http://www.w3.org/2000/svg","circle");
+    c.setAttribute("cx",PX(b.lon)); c.setAttribute("cy",PY(b.lat));
+    c.setAttribute("r",4); c.setAttribute("fill","#"+b.color.toString(16).padStart(6,"0"));
+    c.setAttribute("stroke","#0d1620"); c.setAttribute("stroke-width","1.2");
+    const tt=document.createElementNS("http://www.w3.org/2000/svg","title");
+    tt.textContent=b.name; c.appendChild(tt);
+    c.addEventListener("click",()=>selectBridge(i));
+    svg.appendChild(c);
+  });
+})();
+
+/* ---------- الكاميرا ---------- */
+const target=new THREE.Vector3(0,0,0);
+function fitRadius(){ // مسافة تُظهر المدينة كاملة حسب نسبة الشاشة (عمودي = أبعد)
+  const a=innerWidth/innerHeight;
+  return Math.min(1500, a<1 ? 700*(1.3/a) : 700);
+}
+let theta=0.5, phi=0.95, radius=fitRadius();
+let goalTarget=new THREE.Vector3(0,0,0), goalRadius=radius;
+if(innerWidth<780) document.getElementById("panel").classList.add("closed");
+function applyCam(){
+  camera.position.set(
+    target.x+radius*Math.sin(phi)*Math.sin(theta),
+    target.y+radius*Math.cos(phi),
+    target.z+radius*Math.sin(phi)*Math.cos(theta));
+  camera.lookAt(target);
+}
+applyCam();
+let dragging=false,px=0,py=0,moved=0,activePointers=0;
+const dom=renderer.domElement;
+dom.addEventListener("pointerdown",e=>{
+  activePointers++;
+  if(activePointers===1){dragging=true;moved=0;px=e.clientX;py=e.clientY;}
+  else dragging=false; // إصبعان = قرصة، لا تدوير
+});
+addEventListener("pointerup",()=>{activePointers=Math.max(0,activePointers-1);dragging=false;});
+addEventListener("pointercancel",()=>{activePointers=0;dragging=false;});
+addEventListener("pointermove",e=>{
+  if(!dragging||activePointers>1)return;
+  const dx=e.clientX-px,dy=e.clientY-py;px=e.clientX;py=e.clientY;
+  moved+=Math.abs(dx)+Math.abs(dy);
+  theta-=dx*0.005;
+  phi=Math.min(1.45,Math.max(0.15,phi-dy*0.004));
+});
+dom.addEventListener("wheel",e=>{
+  e.preventDefault();
+  goalRadius=Math.min(1500,Math.max(110,goalRadius*(e.deltaY>0?1.12:0.89)));
+},{passive:false});
+let pinchD=0;
+dom.addEventListener("touchstart",e=>{
+  if(e.touches.length===2)
+    pinchD=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
+},{passive:true});
+dom.addEventListener("touchmove",e=>{
+  if(e.touches.length===2){
+    const d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
+    goalRadius=Math.min(1500,Math.max(110,goalRadius*(pinchD/d)));pinchD=d;}
+},{passive:true});
+
+/* ---------- الاختيار ---------- */
+const ray=new THREE.Raycaster(), mouse=new THREE.Vector2();
+dom.addEventListener("click",e=>{
+  if(moved>6)return;
+  mouse.set((e.clientX/innerWidth)*2-1,-(e.clientY/innerHeight)*2+1);
+  ray.setFromCamera(mouse,camera);
+  const hits=ray.intersectObjects(scene.children,true);
+  for(const h of hits){
+    if(h.object.userData.bridge!==undefined){selectBridge(h.object.userData.bridge);return;}
+  }
+});
+function selectBridge(i){
+  const b=BRIDGES[i], f=bridgeFrames[i];
+  document.getElementById("iName").textContent=b.name;
+  document.getElementById("iAlt").textContent=b.alt;
+  document.getElementById("iKarkh").textContent="الكرخ: "+b.karkh;
+  document.getElementById("iRusafa").textContent="الرصافة: "+b.rusafa;
+  document.getElementById("iDesc").textContent=b.desc;
+  document.getElementById("iMeta").textContent=b.meta;
+  document.getElementById("info").classList.add("show");
+  document.querySelectorAll("#bridgeList li").forEach((li,k)=>li.classList.toggle("active",k===i));
+  goalTarget.copy(f.pos).setY(8);
+  goalRadius=200;
+}
+function closeInfo(){
+  document.getElementById("info").classList.remove("show");
+  document.querySelectorAll("#bridgeList li").forEach(li=>li.classList.remove("active"));
+  goalTarget.set(0,0,0); goalRadius=fitRadius();
+}
+
+/* ---------- القائمة ---------- */
+const ul=document.getElementById("bridgeList");
+BRIDGES.forEach((b,i)=>{
+  const li=document.createElement("li");
+  const hex="#"+b.color.toString(16).padStart(6,"0");
+  li.innerHTML=`<span class="dot" style="background:${hex}"></span>
+    <span class="nm">${b.name}</span><small>${b.meta.includes("افتُتح")?b.meta.split("•")[0].replace("افتُتح","").trim():""}</small>`;
+  li.addEventListener("click",()=>selectBridge(i));
+  ul.appendChild(li);
+});
+function togglePanel(){document.getElementById("panel").classList.toggle("closed");}
+const cbB=document.getElementById("cbBridges"),
+      cbD=document.getElementById("cbDistricts"),
+      cbS=document.getElementById("cbSpin");
+
+/* ---------- الحلقة ---------- */
+const vv=new THREE.Vector3(), clock=new THREE.Clock();
+function animate(){
+  requestAnimationFrame(animate);
+  const t=clock.getElapsedTime();
+  const p=riverGeo.attributes.position;
+  for(let i=0;i<p.count;i++){
+    const bx=riverBase[i*3], bz=riverBase[i*3+2];
+    p.setY(i, Math.sin(bx*0.07+t*1.4)*0.45+Math.cos(bz*0.05+t*0.9)*0.4);
+  }
+  p.needsUpdate=true;
+  if(cbS.checked) theta+=0.0012;
+  target.lerp(goalTarget,0.06);
+  radius+=(goalRadius-radius)*0.06;
+  applyCam();
+  const showB=cbB.checked, showD=cbD.checked;
+  for(const L of labels){
+    const isB=L.kind==="bridge", isD=L.kind==="district";
+    if((isB&&!showB)||(isD&&!showD)){L.el.style.display="none";continue;}
+    vv.copy(L.pos).project(camera);
+    if(vv.z>1||vv.z<-1){L.el.style.display="none";continue;}
+    if((isD||L.kind==="landmark")&&radius>1100){L.el.style.display="none";continue;}
+    L.el.style.display="block";
+    L.el.style.left=((vv.x*0.5+0.5)*innerWidth)+"px";
+    L.el.style.top=((-vv.y*0.5+0.5)*innerHeight)+"px";
+  }
+  renderer.render(scene,camera);
+}
+animate();
+addEventListener("resize",()=>{
+  camera.aspect=innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
+  if(!document.getElementById("info").classList.contains("show")) goalRadius=fitRadius();
+});
+</script>
+</body>
+</html>
